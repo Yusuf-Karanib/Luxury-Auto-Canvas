@@ -1412,6 +1412,9 @@
     }, { passive: true });
 
     // ── Filter logic ──
+    // Per-card hide timers — tracked so rapid filter changes cancel pending hides
+    const hideTimers = new WeakMap();
+
     function matchesFilters(card, f) {
       if (f.make  && card.dataset.make  !== f.make)  return false;
       if (f.year  && card.dataset.year  !== f.year)  return false;
@@ -1446,27 +1449,33 @@
       cards.forEach(card => {
         const show = matchesFilters(card, f);
 
+        // Always cancel any in-flight hide timer for this card first
+        if (hideTimers.has(card)) {
+          clearTimeout(hideTimers.get(card));
+          hideTimers.delete(card);
+        }
+
         if (show) {
           visible++;
+          // Restore from hidden state with a smooth fade-in
+          card.classList.remove('hiding');
           if (card.classList.contains('hidden')) {
-            // Was hidden: make visible in layout but invisible, then fade in
             card.classList.remove('hidden');
             card.classList.add('showing');
-            // Force reflow so transition fires
-            void card.offsetWidth;
+            void card.offsetWidth; // force reflow so CSS transition fires
             card.classList.remove('showing');
-          } else {
-            card.classList.remove('hiding', 'showing');
           }
         } else {
           if (!card.classList.contains('hidden')) {
-            // Step 1: fade to transparent (card still in flow, no gap yet)
+            // Phase 1: fade out (card stays in grid flow — no gap)
             card.classList.add('hiding');
-            // Step 2: after fade, remove from layout flow (fixes grid gap)
-            setTimeout(() => {
+            // Phase 2: remove from layout after fade completes (grid reflows cleanly)
+            const timer = setTimeout(() => {
               card.classList.remove('hiding');
               card.classList.add('hidden');
+              hideTimers.delete(card);
             }, FADE_MS);
+            hideTimers.set(card, timer);
           }
         }
       });
