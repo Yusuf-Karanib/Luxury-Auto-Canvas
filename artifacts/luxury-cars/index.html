@@ -687,20 +687,27 @@
       line-height: 1.8;
     }
 
-    /* Card hidden state — smooth fade */
+    /* Card show/hide — two-phase: fade then collapse */
     .car-card {
-      transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.35s ease;
+      transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.35s ease;
     }
 
-    .car-card.hidden {
-      opacity: 0;
-      pointer-events: none;
-      transform: scale(0.97);
-    }
-
+    /* Step 1: visually fade out (still in layout flow) */
     .car-card.hiding {
       opacity: 0;
-      transform: scale(0.97);
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+
+    /* Step 2: remove from grid flow entirely */
+    .car-card.hidden {
+      display: none;
+    }
+
+    /* Fade in from invisible */
+    .car-card.showing {
+      opacity: 0;
+      transform: scale(0.96);
     }
 
     /* ─── SERVICES ─── */
@@ -1405,18 +1412,17 @@
     }, { passive: true });
 
     // ── Filter logic ──
-    function matchesFilters(card, filters) {
-      const { make, price, year, km, specs } = filters;
-      if (make  && card.dataset.make  !== make)  return false;
-      if (year  && card.dataset.year  !== year)  return false;
-      if (specs && card.dataset.specs !== specs) return false;
-      if (price) {
-        const [lo, hi] = price.split('-').map(Number);
+    function matchesFilters(card, f) {
+      if (f.make  && card.dataset.make  !== f.make)  return false;
+      if (f.year  && card.dataset.year  !== f.year)  return false;
+      if (f.specs && card.dataset.specs !== f.specs) return false;
+      if (f.price) {
+        const [lo, hi] = f.price.split('-').map(Number);
         const p = Number(card.dataset.price);
         if (p < lo || p > hi) return false;
       }
-      if (km) {
-        const [lo, hi] = km.split('-').map(Number);
+      if (f.km) {
+        const [lo, hi] = f.km.split('-').map(Number);
         const k = Number(card.dataset.km);
         if (k < lo || k > hi) return false;
       }
@@ -1424,7 +1430,7 @@
     }
 
     function applyFilters() {
-      const filters = {
+      const f = {
         make  : document.getElementById('fMake').value,
         price : document.getElementById('fPrice').value,
         year  : document.getElementById('fYear').value,
@@ -1435,37 +1441,39 @@
       const cards = Array.from(document.querySelectorAll('.car-card'));
       const total = cards.length;
       let visible = 0;
+      const FADE_MS = 280;
 
-      // Phase 1: fade out cards that should hide
       cards.forEach(card => {
-        const show = matchesFilters(card, filters);
+        const show = matchesFilters(card, f);
+
         if (show) {
-          card.classList.remove('hidden');
           visible++;
+          if (card.classList.contains('hidden')) {
+            // Was hidden: make visible in layout but invisible, then fade in
+            card.classList.remove('hidden');
+            card.classList.add('showing');
+            // Force reflow so transition fires
+            void card.offsetWidth;
+            card.classList.remove('showing');
+          } else {
+            card.classList.remove('hiding', 'showing');
+          }
         } else {
-          // Fade out first, then collapse after transition
-          card.classList.add('hiding');
-          setTimeout(() => {
-            if (card.classList.contains('hiding')) {
+          if (!card.classList.contains('hidden')) {
+            // Step 1: fade to transparent (card still in flow, no gap yet)
+            card.classList.add('hiding');
+            // Step 2: after fade, remove from layout flow (fixes grid gap)
+            setTimeout(() => {
               card.classList.remove('hiding');
               card.classList.add('hidden');
-            }
-          }, 300);
-        }
-      });
-
-      // Phase 2: reveal matching cards (remove hidden)
-      cards.forEach(card => {
-        if (matchesFilters(card, filters)) {
-          card.classList.remove('hidden', 'hiding');
+            }, FADE_MS);
+          }
         }
       });
 
       document.getElementById('visibleCount').textContent = visible;
       document.getElementById('totalCount').textContent   = total;
-
-      const noResults = document.getElementById('noResults');
-      noResults.classList.toggle('visible', visible === 0);
+      document.getElementById('noResults').classList.toggle('visible', visible === 0);
     }
 
     // Live filter on every dropdown change
