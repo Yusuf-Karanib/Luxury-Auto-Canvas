@@ -687,8 +687,21 @@
       line-height: 1.8;
     }
 
-    /* Card hidden state */
-    .car-card.hidden { display: none; }
+    /* Card hidden state — smooth fade */
+    .car-card {
+      transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.35s ease;
+    }
+
+    .car-card.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.97);
+    }
+
+    .car-card.hiding {
+      opacity: 0;
+      transform: scale(0.97);
+    }
 
     /* ─── SERVICES ─── */
 
@@ -1149,7 +1162,7 @@
         </div>
         <div class="car-body">
           <div class="car-year-make">2023 · Bentley</div>
-          <div class="car-model">Continental GT<br/>Speed</div>
+          <div class="car-model">Continental GT</div>
           <div class="car-specs">
             <div class="spec-item">
               <span class="spec-label">Mileage</span>
@@ -1186,7 +1199,7 @@
         </div>
         <div class="car-body">
           <div class="car-year-make">2024 · Lamborghini</div>
-          <div class="car-model">Urus Performante</div>
+          <div class="car-model">Urus</div>
           <div class="car-specs">
             <div class="spec-item">
               <span class="spec-label">Mileage</span>
@@ -1222,7 +1235,7 @@
         </div>
         <div class="car-body">
           <div class="car-year-make">2023 · Ferrari</div>
-          <div class="car-model">Roma Spider</div>
+          <div class="car-model">Roma</div>
           <div class="car-specs">
             <div class="spec-item">
               <span class="spec-label">Mileage</span>
@@ -1392,41 +1405,59 @@
     }, { passive: true });
 
     // ── Filter logic ──
+    function matchesFilters(card, filters) {
+      const { make, price, year, km, specs } = filters;
+      if (make  && card.dataset.make  !== make)  return false;
+      if (year  && card.dataset.year  !== year)  return false;
+      if (specs && card.dataset.specs !== specs) return false;
+      if (price) {
+        const [lo, hi] = price.split('-').map(Number);
+        const p = Number(card.dataset.price);
+        if (p < lo || p > hi) return false;
+      }
+      if (km) {
+        const [lo, hi] = km.split('-').map(Number);
+        const k = Number(card.dataset.km);
+        if (k < lo || k > hi) return false;
+      }
+      return true;
+    }
+
     function applyFilters() {
-      const make   = document.getElementById('fMake').value;
-      const price  = document.getElementById('fPrice').value;
-      const year   = document.getElementById('fYear').value;
-      const km     = document.getElementById('fKm').value;
-      const specs  = document.getElementById('fSpecs').value;
+      const filters = {
+        make  : document.getElementById('fMake').value,
+        price : document.getElementById('fPrice').value,
+        year  : document.getElementById('fYear').value,
+        km    : document.getElementById('fKm').value,
+        specs : document.getElementById('fSpecs').value,
+      };
 
-      const cards = document.querySelectorAll('.car-card');
-      let visible = 0;
+      const cards = Array.from(document.querySelectorAll('.car-card'));
       const total = cards.length;
+      let visible = 0;
 
+      // Phase 1: fade out cards that should hide
       cards.forEach(card => {
-        let show = true;
-
-        if (make  && card.dataset.make  !== make)  show = false;
-        if (year  && card.dataset.year  !== year)  show = false;
-        if (specs && card.dataset.specs !== specs) show = false;
-
-        if (price && show) {
-          const [lo, hi] = price.split('-').map(Number);
-          const p = Number(card.dataset.price);
-          if (p < lo || p > hi) show = false;
-        }
-
-        if (km && show) {
-          const [lo, hi] = km.split('-').map(Number);
-          const k = Number(card.dataset.km);
-          if (k < lo || k > hi) show = false;
-        }
-
+        const show = matchesFilters(card, filters);
         if (show) {
           card.classList.remove('hidden');
           visible++;
         } else {
-          card.classList.add('hidden');
+          // Fade out first, then collapse after transition
+          card.classList.add('hiding');
+          setTimeout(() => {
+            if (card.classList.contains('hiding')) {
+              card.classList.remove('hiding');
+              card.classList.add('hidden');
+            }
+          }, 300);
+        }
+      });
+
+      // Phase 2: reveal matching cards (remove hidden)
+      cards.forEach(card => {
+        if (matchesFilters(card, filters)) {
+          card.classList.remove('hidden', 'hiding');
         }
       });
 
